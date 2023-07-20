@@ -24,42 +24,11 @@ class RecordCubit extends Cubit<RecordState> {
   Codec _codec = Codec.pcm16WAV;
 
   String? audioFileName;
+  String? completeAudioFilePath;
 
   final FlutterSoundRecorder _audioRecorder = FlutterSoundRecorder();
 
   void startRecording() async {
-    
-    // Map<Permission, PermissionStatus> permissions = await [
-    //   Permission.storage,
-    //   Permission.microphone,
-    // ].request();
-
-    // bool permissionsGranted = permissions[Permission.microphone]!.isGranted;
-    // // && permissions[Permission.storage]!.isGranted 
-        
-
-    // if (permissionsGranted) {
-    //   final Directory tempDir = await getTemporaryDirectory();
-    //   // Directory appFolder = Directory(Paths.recording);
-    //   // bool appFolderExists = await appFolder.exists();
-    //   // if (!appFolderExists) {
-    //   //   final created = await appFolder.create(recursive: true);
-    //   //   print(created.path);
-    //   // }
-
-    //   final filepath = '$tempDir/${DateTime.now().millisecondsSinceEpoch}${RecorderConstants.fileExtention}';
-    //   print(filepath);
-
-    //   await _audioRecorder.start(path: filepath);
-
-    //   emit(RecordOn());
-    // } else {
-    //   print('Permissions not granted');
-    // }
-
-
-
-/////////////////////////////////////
 
     final statusMic = await Permission.microphone.request();
     if(statusMic != PermissionStatus.granted){
@@ -73,19 +42,18 @@ class RecordCubit extends Cubit<RecordState> {
       print(created.path);
     }
 
-    // audioFileName = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}${RecorderConstants.fileExtention}';
-    audioFileName = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}';
-      var completeAudioFilePath = '${tempDir.path}/$audioFileName';
+    audioFileName = '${DateTime.now().millisecondsSinceEpoch}${RecorderConstants.fileExtention}';
+    completeAudioFilePath = '${tempDir.path}/$audioFileName';
 
-      print(completeAudioFilePath);
+    print(completeAudioFilePath);
 
-    File(completeAudioFilePath)
+    File(completeAudioFilePath!)
       .create(recursive: true)
       .then((File file) async {
-    //write to file
-    Uint8List bytes = await file.readAsBytes();
-    file.writeAsBytes(bytes);
-    print("FILE CREATED AT : "+file.path);
+      //write to file
+      Uint8List bytes = await file.readAsBytes();
+      file.writeAsBytes(bytes);
+      print("FILE CREATED AT : "+file.path);
     });
 
 
@@ -111,74 +79,29 @@ class RecordCubit extends Cubit<RecordState> {
       androidWillPauseWhenDucked: true,
     ));
 
-    // print("starting check");
-    // print(await _audioRecorder.isEncoderSupported(Codec.aacADTS));
-    // print(await _audioRecorder.isEncoderSupported(Codec.defaultCodec));
-    // print("pcm16wav");
-    // print(await _audioRecorder.isEncoderSupported(Codec.pcm16WAV));
-    // print(await _audioRecorder.isEncoderSupported(Codec.aacADTS));
-    // print(await _audioRecorder.isEncoderSupported(Codec.aacADTS));
+    await _audioRecorder.startRecorder(toFile: completeAudioFilePath, codec: Codec.defaultCodec);
 
-    await _audioRecorder.startRecorder(toFile: audioFileName, codec: Codec.defaultCodec);
-
-    
-    
     emit(RecordOn());
-
-
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++//
-
-    // if (await _audioRecorder.hasPermission()) {
-    //   // Start recording
-    //   final Directory tempDir = await getTemporaryDirectory();
-    //   bool appFolderExists = await tempDir.exists();
-    //   if (!appFolderExists) {
-    //     final created = await tempDir.create(recursive: true);
-    //     print(created.path);
-    //   }
-    //   audioFileName = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}${RecorderConstants.fileExtention}';
-    //   var completeAudioFilePath = '${tempDir.path}/$audioFileName';
-
-    //   print(completeAudioFilePath);
-
-    //   File(completeAudioFilePath)
-    //     .create(recursive: true)
-    //     .then((File file) async {
-    //   //write to file
-    //   Uint8List bytes = await file.readAsBytes();
-    //   file.writeAsBytes(bytes);
-    //   print("FILE CREATED AT : "+file.path);
-    // });
-
-
-
-    //   await _audioRecorder.start(
-    //     path: completeAudioFilePath,
-    //     encoder: AudioEncoder.aacLc, // by default
-    //     bitRate: 128000, // by default
-    //   );
-    //   emit(RecordOn());
-    // }
-
-     //+++++++++++++++++++++++++++++++++++++++++++++++++++//
-
 
   }
 
   void stopRecording() async {
     String? path = await _audioRecorder.stopRecorder();
     emit(RecordStopped());
-    if (path != null) {
-      print('Output path $path');
-      _sendAudioToServer(path);
+    _sendAudioToServer('');
+    if (path == ''){
+      print('Output path $completeAudioFilePath');
     }
   }
 
   Future<void> _sendAudioToServer(String filePath) async {
-
-    var url = Uri.parse('http://10.0.2.2:3000/api/v1/audio_recording');
+    const TRANSCRIBE_EDPOINT = "http://10.0.2.2:3000/api/v1/audio_recording";
+    // const TRANSCRIBE_EDPOINT = 'http://ec2-18-189-229-171.us-east-2.compute.amazonaws.com/api/v1/audio_recording';
+    
+    var url = Uri.parse(TRANSCRIBE_EDPOINT);
     var request = http.MultipartRequest('POST', url);
-    request.files.add(await http.MultipartFile.fromPath('audio_data', filePath, filename: audioFileName, contentType: MediaType('audio', 'ogg')));
+    
+    request.files.add(await http.MultipartFile.fromPath('audio_data', completeAudioFilePath!, filename: audioFileName, contentType: MediaType('audio', 'wav')));
     var streamedResponse = await request.send();
 
     var response = await http.Response.fromStream(streamedResponse);
@@ -194,17 +117,4 @@ class RecordCubit extends Cubit<RecordState> {
     }
   }
 
-  // Future<Amplitude> getAmplitude() async {
-  //   final amplitude = await _audioRecorder.getAmplitude();
-  //   return amplitude;
-  // }
-
-  // Stream<double> aplitudeStream() async* {
-  //   while (true) {
-  //     await Future.delayed(Duration(
-  //         milliseconds: RecorderConstants.amplitudeCaptureRateInMilliSeconds));
-  //     final ap = await _audioRecorder.getAmplitude();
-  //     yield ap.current;
-  //   }
-  // }
 }
