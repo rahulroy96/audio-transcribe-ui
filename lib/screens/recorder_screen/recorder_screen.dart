@@ -17,22 +17,25 @@ import '../../constants/APIConstants.dart';
 import '../recording_list/recording_list.dart';
 
 class RecordingScreen extends StatefulWidget {
+  const RecordingScreen({super.key});
+
   @override
-  _RecordingScreenState createState() => _RecordingScreenState();
+  RecordingScreenState createState() => RecordingScreenState();
 }
 
-class _RecordingScreenState extends State<RecordingScreen> {
-  FlutterSoundRecorder _audioRecorder = FlutterSoundRecorder();
-  FlutterSoundPlayer _player = FlutterSoundPlayer();
+class RecordingScreenState extends State<RecordingScreen> {
+  final FlutterSoundRecorder _audioRecorder = FlutterSoundRecorder();
+  final FlutterSoundPlayer _player = FlutterSoundPlayer();
+  final TextEditingController _commentController = TextEditingController();
 
   String? _completeAudioFilePath;
   String? _audioFileName;
   String _transcribedText = '';
-  TextEditingController _commentController = TextEditingController();
   bool _isRecording = false;
   bool _hasRecorded = false;
   bool _isPlaying = false;
   bool _hasTranscribed = false;
+  bool _isUploading = false;
   int _transcriptionId = -1;
 
   @override
@@ -59,19 +62,15 @@ class _RecordingScreenState extends State<RecordingScreen> {
     super.dispose();
   }
 
-  Future<bool> _resetState() async {
-    setState(() {
-      _isRecording = false;
-      _isPlaying = false;
-      _hasTranscribed = false;
-      _hasRecorded = false;
-      _transcribedText = '';
-      _transcriptionId = -1;
-    });
-    return true;
-  }
-
   void _startRecording() async {
+    if (_hasTranscribed) {
+      setState(() {
+        _hasTranscribed = false;
+        _transcriptionId = -1;
+        _transcribedText = "";
+      });
+    }
+
     final statusMic = await Permission.microphone.request();
     if (statusMic != PermissionStatus.granted) {
       throw RecordingPermissionException('microphone permission');
@@ -101,42 +100,32 @@ class _RecordingScreenState extends State<RecordingScreen> {
 
     await _audioRecorder.openRecorder();
 
-    final session = await AudioSession.instance;
-
-    await session.configure(AudioSessionConfiguration(
-      avAudioSessionCategory: AVAudioSessionCategory.record,
-      avAudioSessionCategoryOptions:
-          AVAudioSessionCategoryOptions.allowBluetooth |
-              AVAudioSessionCategoryOptions.defaultToSpeaker,
-      avAudioSessionMode: AVAudioSessionMode.spokenAudio,
-      avAudioSessionRouteSharingPolicy:
-          AVAudioSessionRouteSharingPolicy.defaultPolicy,
-      avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
-      androidAudioAttributes: const AndroidAudioAttributes(
-        contentType: AndroidAudioContentType.speech,
-        flags: AndroidAudioFlags.none,
-        usage: AndroidAudioUsage.voiceCommunication,
-      ),
-      androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
-      androidWillPauseWhenDucked: true,
-    ));
-
     await _audioRecorder.startRecorder(
         toFile: _completeAudioFilePath, codec: Codec.defaultCodec);
   }
 
   void _stopRecordingAndUpload() async {
     await _audioRecorder.stopRecorder();
-    _hasRecorded = true;
-    _sendAudioToServer();
+
+    bool uploaded = await _sendAudioToServer();
+    // if ( uploaded){
+    //   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+    //     backgroundColor: Color.fromRGBO(0, 255, 0, 0.5),
+    //     content: Text('File uploaded successfully.'),
+    //     duration: Duration(seconds: 3),
+    //   ));
+    // }
+    // setState(() {
+    //   _hasRecorded = true;
+    // });
   }
 
-  Future<void> _sendAudioToServer() async {
-    // const TRANSCRIBE_EDPOINT = "http://10.0.2.2:3000/api/v1/audio_recording";
-    const TRANSCRIBE_EDPOINT = APIConstants.baseUrl;
-    // "http://ec2-18-189-229-171.us-east-2.compute.amazonaws.com/api/v1/audio_recording";
+  Future<bool> _sendAudioToServer() async {
+    setState(() {
+      _isUploading = true;
+    });
 
-    var url = Uri.parse(TRANSCRIBE_EDPOINT);
+    var url = Uri.parse(APIConstants.baseUrl);
     var request = http.MultipartRequest('POST', url);
 
     request.files.add(await http.MultipartFile.fromPath(
@@ -146,14 +135,14 @@ class _RecordingScreenState extends State<RecordingScreen> {
 
     var response = await http.Response.fromStream(streamedResponse);
     if (response.statusCode == 201) {
-      print(response.body);
-      print('Audio Uploaded Successfully');
+      print("response body of create: $response.body");
+      print('Transcribed Successfully');
 
       var data = jsonDecode(response.body);
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         backgroundColor: Color.fromRGBO(0, 255, 0, 0.5),
-        content: Text('File uploaded successfully.'),
+        content: Text('Transcribed successfully.'),
         duration: Duration(seconds: 3),
       ));
 
@@ -162,15 +151,25 @@ class _RecordingScreenState extends State<RecordingScreen> {
         _transcribedText = data["transcription"];
         _transcriptionId = data["id"];
         _completeAudioFilePath = _completeAudioFilePath;
+        _isUploading = false;
       });
+
+      return true;
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(response.body),
-        duration: Duration(seconds: 3),
+        duration: const Duration(seconds: 3),
       ));
-      print(response.reasonPhrase);
+      setState(() {
+        _isUploading = false;
+        _hasTranscribed = false;
+        _transcribedText = "";
+        _transcriptionId = -13;
+      });
+
       print(response.statusCode);
       print('Audio Upload Failed');
+      return false;
     }
   }
 
@@ -230,104 +229,118 @@ class _RecordingScreenState extends State<RecordingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-        onWillPop: _resetState,
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text('Notes Transcriber'),
-            actions: <Widget>[
-              IconButton(
-                icon: Icon(Icons.list),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => RecordingsListPage()),
-                  );
-                },
-              ),
-            ],
+    var transcribedTextView = Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(10.0),
+        margin: const EdgeInsets.all(10.0),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey),
+          borderRadius: BorderRadius.circular(10.0),
+        ),
+        child: TextField(
+          readOnly: true,
+          maxLines: 5,
+          textAlign: TextAlign.center,
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            hintText: _transcribedText.isNotEmpty
+                ? _transcribedText
+                : 'Your Transcribed text will appear here!',
           ),
-          body: Column(
-            children: <Widget>[
-              Expanded(
-                child: Container(
-                  padding: EdgeInsets.all(10.0),
-                  margin: EdgeInsets.all(10.0),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(10.0),
-                  ),
-                  child: TextField(
-                    readOnly: true,
-                    maxLines: 5,
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      hintText: _transcribedText.isNotEmpty
-                          ? _transcribedText
-                          : 'Your Transcribed text will appear here!',
-                    ),
-                  ),
+        ),
+      ),
+    );
+    var commentView = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 20.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 15.0),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(25.0),
+              ),
+              child: TextField(
+                controller: _commentController,
+                enabled: _hasTranscribed,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Type your comments',
                 ),
               ),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8.0, vertical: 20.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 15.0),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(25.0),
-                        ),
-                        child: TextField(
-                          controller: _commentController,
-                          enabled: _hasTranscribed,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Type your comments',
-                          ),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.send_rounded),
-                      onPressed: _hasTranscribed ? _sendComment : null,
-                    ),
-                  ],
-                ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.send_rounded),
+            onPressed: _hasTranscribed ? _sendComment : null,
+          ),
+        ],
+      ),
+    );
+
+    var buttonRow = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          icon: Icon(_isRecording ? Icons.mic_off : Icons.mic),
+          onPressed: _onRecordButtonPressed,
+          color: _isRecording ? Colors.red : Colors.blue,
+          iconSize: 50,
+        ),
+        if (_hasRecorded)
+          IconButton(
+            icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+            onPressed: _hasRecorded ? _playRecording : _pauseRecording,
+            color: _hasRecorded ? Colors.grey : Colors.blue,
+            iconSize: 50,
+          )
+        else
+          IconButton(
+            icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+            onPressed: _hasRecorded ? _playRecording : null,
+            color: _hasRecorded ? Colors.grey : Colors.blue,
+            iconSize: 50,
+          ),
+      ],
+    );
+
+    var centeredMic = Expanded(
+        child: Center(
+            child: _isUploading
+                ? CircularProgressIndicator() // Show loading spinner when uploading
+                : IconButton(
                     icon: Icon(_isRecording ? Icons.mic_off : Icons.mic),
-                    onPressed: _onRecordButtonPressed,
+                    onPressed: _isUploading ? null : _onRecordButtonPressed,
                     color: _isRecording ? Colors.red : Colors.blue,
-                    iconSize: 50,
-                  ),
-                  if (_hasRecorded)
-                    IconButton(
-                      icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                      onPressed:
-                          _hasRecorded ? _playRecording : _pauseRecording,
-                      color: _hasRecorded ? Colors.grey : Colors.blue,
-                      iconSize: 50,
-                    )
-                  else
-                    IconButton(
-                      icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                      onPressed: _hasRecorded ? _playRecording : null,
-                      color: _hasRecorded ? Colors.grey : Colors.blue,
-                      iconSize: 50,
-                    ),
-                ],
-              )
-            ],
+                    iconSize: 100,
+                  )));
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Notes Transcriber'),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.list),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => RecordingsListPage()),
+              );
+            },
           ),
-        ));
+        ],
+      ),
+      body: Column(
+        children: <Widget>[
+          if (_hasTranscribed) ...[
+            transcribedTextView,
+            commentView,
+            buttonRow,
+          ] else
+            centeredMic
+        ],
+      ),
+    );
   }
 }
