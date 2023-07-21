@@ -139,13 +139,13 @@ class RecordingScreenState extends State<RecordingScreen> {
       print('Transcribed Successfully');
 
       var data = jsonDecode(response.body);
-
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        backgroundColor: Color.fromRGBO(0, 255, 0, 0.5),
-        content: Text('Transcribed successfully.'),
-        duration: Duration(seconds: 3),
-      ));
-
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          backgroundColor: Color.fromRGBO(0, 255, 0, 0.5),
+          content: Text('Transcribed successfully.'),
+          duration: Duration(seconds: 3),
+        ));
+      }
       setState(() {
         _hasTranscribed = true;
         _transcribedText = data["transcription"];
@@ -156,10 +156,12 @@ class RecordingScreenState extends State<RecordingScreen> {
 
       return true;
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(response.body),
-        duration: const Duration(seconds: 3),
-      ));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(response.body),
+          duration: const Duration(seconds: 3),
+        ));
+      }
       setState(() {
         _isUploading = false;
         _hasTranscribed = false;
@@ -167,8 +169,6 @@ class RecordingScreenState extends State<RecordingScreen> {
         _transcriptionId = -13;
       });
 
-      print(response.statusCode);
-      print('Audio Upload Failed');
       return false;
     }
   }
@@ -307,14 +307,52 @@ class RecordingScreenState extends State<RecordingScreen> {
 
     var centeredMic = Expanded(
         child: Center(
-            child: _isUploading
-                ? CircularProgressIndicator() // Show loading spinner when uploading
-                : IconButton(
-                    icon: Icon(_isRecording ? Icons.mic_off : Icons.mic),
-                    onPressed: _isUploading ? null : _onRecordButtonPressed,
-                    color: _isRecording ? Colors.red : Colors.blue,
-                    iconSize: 100,
-                  )));
+            child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+          if (_isUploading) ...[
+            const CircularProgressIndicator(), // Show loading spinner when uploading
+            const Padding(
+              padding: EdgeInsets.only(top: 20.0),
+              child: Text(
+                'Transcribing...',
+                style: TextStyle(
+                  fontSize: 20.0,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ] else ...[
+            IconButton(
+              icon: Icon(_isRecording ? Icons.mic_off : Icons.mic),
+              onPressed: _isUploading ? null : _onRecordButtonPressed,
+              color: _isRecording ? Colors.red : Colors.blue,
+              iconSize: 100,
+            ),
+            if (_isRecording)
+              const Padding(
+                padding: EdgeInsets.only(top: 20.0),
+                child: Text(
+                  'Click to Stop Recording',
+                  style: TextStyle(
+                    fontSize: 20.0,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.only(top: 20.0),
+                child: Text(
+                  'Click to Start Recording',
+                  style: TextStyle(
+                    fontSize: 20.0,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+          ]
+        ])));
 
     return Scaffold(
       appBar: AppBar(
@@ -325,7 +363,8 @@ class RecordingScreenState extends State<RecordingScreen> {
             onPressed: () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => RecordingsListPage()),
+                MaterialPageRoute(
+                    builder: (context) => const RecordingsListPage()),
               );
             },
           ),
