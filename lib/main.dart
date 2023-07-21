@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'constants/app_colors.dart';
-import 'screens/recorder_screen/cubit/record_cubit.dart';
 import 'screens/recorder_screen/recorder_screen.dart';
-// import 'screens/recordings_list/view/recordings_list_screen.dart';
-
-// import 'screens/recordings_list/cubit/files/files_cubit.dart';
 
 void main() async {
   runApp(MyApp());
@@ -20,31 +15,13 @@ class MyApp extends StatelessWidget {
       systemNavigationBarColor: AppColors.mainColor, // navigation bar color
       statusBarColor: Colors.transparent, // status bar color
     ));
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<RecordCubit>(
-          create: (context) => RecordCubit(),
-        ),
-
-        /// [FilesCubit] is provided before material app because it should start loading all files when app is opens
-        /// asynschronous method [getFiles] is called in constructor of [Files Cubit].
-        // BlocProvider<FilesCubit>(
-        //   create: (context) => FilesCubit(),
-        // ),
-      ],
-      child: MaterialApp(
-        title: 'Rapid Note',
+    return MaterialApp(
+        title: 'Audio Recording App',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primarySwatch: Colors.blue,
         ),
-        initialRoute: RecorderScreen.routeName,
-        routes: {
-          RecorderScreen.routeName: (context) => const RecorderScreen(),
-          // RecordingsListScreen.routeName: (context) => RecordingsListScreen(),
-        },
-      ),
-    );
+        home: RecordingScreen());
   }
 }
 
