@@ -239,11 +239,11 @@ class _RecordingScreenState extends State<RecordingScreen> {
               IconButton(
                 icon: Icon(Icons.list),
                 onPressed: () {
-                  // Navigator.push(
-                  //   context,
-                  //   MaterialPageRoute(
-                  //       builder: (context) => RecordingsListPage()),
-                  // );
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => RecordingsListPage()),
+                  );
                 },
               ),
             ],
