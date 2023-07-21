@@ -1,32 +1,30 @@
-import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_sound/public/flutter_sound_player.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:just_audio/just_audio.dart';
 
 import '../../constants/APIConstants.dart';
-
-// import '../widgets/audio_player.dart';
+import '../recorder_screen/recorder_screen.dart';
 
 class RecordingsListPage extends StatefulWidget {
+  const RecordingsListPage({super.key});
+
   @override
-  _RecordingsListPageState createState() => _RecordingsListPageState();
+  RecordingsListPageState createState() => RecordingsListPageState();
 }
 
-class _RecordingsListPageState extends State<RecordingsListPage> {
-  ScrollController _scrollController = ScrollController();
+class RecordingsListPageState extends State<RecordingsListPage> {
+  final ScrollController _scrollController = ScrollController();
   int _page = 1;
   List _recordings = [];
-  bool _isPlaying = false;
-  // String _selectedAudioUrl = "";
-  FlutterSoundPlayer _player = FlutterSoundPlayer();
+
+  AudioPlayer? _player;
 
   @override
   void initState() {
     super.initState();
-    _player.openPlayer();
+    _player = AudioPlayer();
 
-    _isPlaying = false;
     fetchRecordings();
     _scrollController.addListener(() {
       if (_scrollController.position.pixels ==
@@ -37,74 +35,113 @@ class _RecordingsListPageState extends State<RecordingsListPage> {
   }
 
   fetchRecordings() async {
-    // "http://ec2-18-189-229-171.us-east-2.compute.amazonaws.com/api/v1/audio_recording?page=$_page";
-    // String URL = "http://10.0.2.2:3000/api/v1/audio_recording";
-    var response =
-        await http.get(Uri.parse("${APIConstants.baseUrl}?page=$_page"));
+    try {
+      var response =
+          await http.get(Uri.parse("${APIConstants.baseUrl}?page=$_page"));
 
-    if (response.statusCode == 200) {
-      List newRecordings = json.decode(response.body);
-      if (newRecordings.isEmpty) {
-        return;
+      if (response.statusCode == 200) {
+        List newRecordings = json.decode(response.body);
+        if (newRecordings.isEmpty) {
+          return;
+        }
+        // Add the isPlaying state to each element that is being fetched from server. Initialize it as false
+        newRecordings = newRecordings
+            .map(
+              (e) => ({...e, "isPlaying": false}),
+            )
+            .toList();
+        setState(() {
+          _recordings.addAll(newRecordings);
+          _page++;
+        });
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            backgroundColor: Color.fromRGBO(0, 255, 0, 0.5),
+            content: Text('Fetching recordings from server failed'),
+            duration: Duration(seconds: 3),
+          ));
+        }
       }
-      newRecordings = newRecordings
-          .map(
-            (e) => ({...e, "isPlaying": false}),
-          )
-          .toList();
-      setState(() {
-        _recordings.addAll(newRecordings);
-        _page++;
-      });
+    } catch (e) {
+      // Handling network exceptions here.
+      print('Network error occurred: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          backgroundColor: Color.fromRGBO(250, 0, 0, 0.5),
+          content: Text('Please check your network connection'),
+          duration: Duration(seconds: 3),
+        ));
+      }
     }
   }
 
   void _playRecording(var index) async {
-    // await _player.openPlayer();
-
     if (_recordings[index]["isPlaying"]) {
       return;
     }
 
-    await _player.startPlayer(fromURI: _recordings[index]["audio_recording"]);
+    if (_player!.playing) {
+      // If the player is already playing a recording, we need to stop it before playing new.
+      // This ensures that the state of already playing element will be properly updated.
+      _player!.stop();
+    }
+
+    await _player!.setUrl(
+        // Load the recording url that is to be played.
+        _recordings[index]["audio_url"]);
+
+    // The when complete makes sure that the isPlaying state updated when the player finishes playing
+    _player!.play().whenComplete(() => setState(() {
+          _recordings[index]["isPlaying"] = false;
+        }));
+
     setState(() {
+      // Update the isPlaying field of all the elements in the list
+      // This helps to make sure that only one of the list elements will have
+      // an audio playing.
+      _recordings = _recordings.map((e) {
+        e["isPlaying"] = false;
+        return e;
+      }).toList();
+
+      // Now set the current elements isPlaying value as true.
       _recordings[index]["isPlaying"] = true;
-      _isPlaying = true;
     });
   }
 
-  void _pauseRecording(var index) async {
-    // await _player.openPlayer();
-
-    await _player.stopPlayer();
-    setState(() {
-      _recordings[index]["isPlaying"] = false;
-      _isPlaying = false;
-    });
+  void _stopRecording(var index) async {
+    // Stop the currently playing track
+    await _player!.stop();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recordings'),
-      ),
-      body:
-          // Column(
-          //   children: <Widget>[
-          //     Expanded(
-          //       flex: 6,
-          //       child:
-          ListView.builder(
+      appBar: AppBar(title: const Text('Recordings'), actions: <Widget>[
+        IconButton(
+          icon: const Icon(Icons.mic),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => RecordingScreen()),
+            );
+          },
+        ),
+      ]),
+      body: ListView.builder(
         controller: _scrollController,
         itemCount: _recordings.length,
         itemBuilder: (context, index) {
           var recording = _recordings[index];
           return ListTile(
             leading: IconButton(
-              icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-              // onPressed: _isPlaying ? _playRecording(recording) : null,
-              onPressed: () => _playRecording(index),
+              icon: Icon(_recordings[index]['isPlaying']
+                  ? Icons.stop
+                  : Icons.play_arrow),
+              onPressed: () => _recordings[index]['isPlaying']
+                  ? _stopRecording(index)
+                  : _playRecording(index),
             ),
             title: Text(recording['transcription'] ?? '[No transcription]'),
             subtitle: Text(recording['comments'] ?? '[no comments]'),
@@ -117,7 +154,7 @@ class _RecordingsListPageState extends State<RecordingsListPage> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _player.closePlayer();
+    _player!.stop();
     super.dispose();
   }
 }
