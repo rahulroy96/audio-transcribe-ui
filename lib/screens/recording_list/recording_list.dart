@@ -119,15 +119,15 @@ class RecordingsListPageState extends State<RecordingsListPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Recordings'), actions: <Widget>[
-        IconButton(
-          icon: const Icon(Icons.mic),
-          onPressed: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => RecordingScreen()),
-            );
-          },
-        ),
+        // IconButton(
+        //   icon: const Icon(Icons.mic),
+        //   onPressed: () {
+        //     Navigator.push(
+        //       context,
+        //       MaterialPageRoute(builder: (context) => RecordingScreen()),
+        //     );
+        //   },
+        // ),
       ]),
       body: ListView.builder(
         controller: _scrollController,
@@ -136,9 +136,11 @@ class RecordingsListPageState extends State<RecordingsListPage> {
           var recording = _recordings[index];
           return ListTile(
             leading: IconButton(
-              icon: Icon(_recordings[index]['isPlaying']
-                  ? Icons.stop
-                  : Icons.play_arrow),
+              icon: Icon(
+                _recordings[index]['isPlaying'] ? Icons.stop : Icons.play_arrow,
+                color:
+                    _recordings[index]['isPlaying'] ? Colors.red : Colors.blue,
+              ),
               onPressed: () => _recordings[index]['isPlaying']
                   ? _stopRecording(index)
                   : _playRecording(index),
