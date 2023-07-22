@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 
 import '../../constants/APIConstants.dart';
 import '../../models/audio_recording.dart';
-import '../recorder_screen/recorder_screen.dart';
 import '../recording_list/recording_list.dart';
 
 class RecordingDisplayScreen extends StatefulWidget {
@@ -28,18 +27,57 @@ class RecordingDisplayScreenState extends State<RecordingDisplayScreen> {
   String _transcribedText = '';
   String _comment = '';
 
-  Map? _recording = {};
-
   @override
   void initState() {
     super.initState();
 
     _isPlaying = false;
-
-    _transcribedText = widget.recording.transcription;
     _transcriptionId = widget.recording.id;
-    _audioFilePath = widget.recording.audioUrl;
-    _comment = widget.recording.comments;
+    fetchRecordings();
+  }
+
+  fetchRecordings() async {
+    try {
+      var response = await http
+          .get(Uri.parse("${APIConstants.baseUrl}/$_transcriptionId"));
+
+      if (response.statusCode == 200) {
+        var responseBody = json.decode(response.body);
+        print(_transcriptionId);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            backgroundColor: Color.fromRGBO(0, 255, 0, 0.5),
+            content: Text('Fetched record'),
+            duration: Duration(seconds: 3),
+          ));
+        }
+
+        setState(() {
+          _transcribedText = responseBody["transcription"] ?? "";
+          _audioFilePath = responseBody["audio_url"] ?? "";
+          _comment = responseBody["comments"] ?? "";
+        });
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            backgroundColor: Color.fromRGBO(0, 255, 0, 0.5),
+            content: Text('Fetching record from server failed'),
+            duration: Duration(seconds: 3),
+          ));
+        }
+      }
+    } catch (e) {
+      // Handling network exceptions here.
+      print('Network error occurred: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          backgroundColor: Color.fromRGBO(250, 0, 0, 0.5),
+          content: Text('Please check your network connection'),
+          duration: Duration(seconds: 3),
+        ));
+      }
+    }
   }
 
   @override
@@ -60,10 +98,7 @@ class RecordingDisplayScreenState extends State<RecordingDisplayScreen> {
 
     if (response.statusCode == 200) {
       var data = json.decode(response.body);
-      print("New comments is: ${data}");
-      print("New comments is: ${data['comments']}");
       setState(() {
-        _recording = data;
         _comment = data["data"]["comments"];
       });
       if (context.mounted) {
@@ -98,6 +133,7 @@ class RecordingDisplayScreenState extends State<RecordingDisplayScreen> {
       // This ensures that the state of already playing element will be properly updated.
       _player.stop();
     }
+    print("url: $_audioFilePath");
 
     await _player.setUrl(_audioFilePath!);
 

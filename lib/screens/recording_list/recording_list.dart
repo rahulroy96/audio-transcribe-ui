@@ -4,7 +4,8 @@ import 'dart:convert';
 import 'package:just_audio/just_audio.dart';
 
 import '../../constants/APIConstants.dart';
-import '../recorder_screen/recorder_screen.dart';
+import '../../models/audio_recording.dart';
+import '../recorder_display/recorder_display.dart';
 
 class RecordingsListPage extends StatefulWidget {
   const RecordingsListPage({super.key});
@@ -118,36 +119,46 @@ class RecordingsListPageState extends State<RecordingsListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Recordings'), actions: <Widget>[
-        // IconButton(
-        //   icon: const Icon(Icons.mic),
-        //   onPressed: () {
-        //     Navigator.push(
-        //       context,
-        //       MaterialPageRoute(builder: (context) => RecordingScreen()),
-        //     );
-        //   },
-        // ),
-      ]),
+      appBar: AppBar(title: const Text('Recordings')),
       body: ListView.builder(
         controller: _scrollController,
         itemCount: _recordings.length,
         itemBuilder: (context, index) {
           var recording = _recordings[index];
-          return ListTile(
-            leading: IconButton(
-              icon: Icon(
-                _recordings[index]['isPlaying'] ? Icons.stop : Icons.play_arrow,
-                color:
-                    _recordings[index]['isPlaying'] ? Colors.red : Colors.blue,
-              ),
-              onPressed: () => _recordings[index]['isPlaying']
-                  ? _stopRecording(index)
-                  : _playRecording(index),
-            ),
-            title: Text(recording['transcription'] ?? '[No transcription]'),
-            subtitle: Text(recording['comments'] ?? '[no comments]'),
-          );
+          return InkWell(
+              onTap: () {
+                print('Tile tapped!');
+
+                if (context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => RecordingDisplayScreen(
+                            recording: Recording(
+                                id: recording["id"],
+                                transcription: recording["transcription"],
+                                audioUrl: recording["audio_url"],
+                                comments: recording["comments"] ?? ""))),
+                  );
+                }
+              },
+              child: ListTile(
+                leading: IconButton(
+                  icon: Icon(
+                    _recordings[index]['isPlaying']
+                        ? Icons.stop
+                        : Icons.play_arrow,
+                    color: _recordings[index]['isPlaying']
+                        ? Colors.red
+                        : Colors.blue,
+                  ),
+                  onPressed: () => _recordings[index]['isPlaying']
+                      ? _stopRecording(index)
+                      : _playRecording(index),
+                ),
+                title: Text(recording['transcription'] ?? '[No transcription]'),
+                subtitle: Text(recording['comments'] ?? '[no comments]'),
+              ));
         },
       ),
     );
