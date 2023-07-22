@@ -246,6 +246,19 @@ class RecordingDisplayScreenState extends State<RecordingDisplayScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Note'),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () {
+            // Use Navigator.pop to send back the data.
+            Navigator.pop(
+                context,
+                Recording(
+                    id: _transcriptionId,
+                    transcription: _transcribedText,
+                    audioUrl: "",
+                    comments: _comment));
+          },
+        ),
         actions: <Widget>[
           IconButton(
             icon: const Icon(Icons.list),

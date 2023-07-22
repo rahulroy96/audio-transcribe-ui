@@ -126,11 +126,11 @@ class RecordingsListPageState extends State<RecordingsListPage> {
         itemBuilder: (context, index) {
           var recording = _recordings[index];
           return InkWell(
-              onTap: () {
+              onTap: () async {
                 print('Tile tapped!');
 
                 if (context.mounted) {
-                  Navigator.push(
+                  final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                         builder: (context) => RecordingDisplayScreen(
@@ -140,6 +140,11 @@ class RecordingsListPageState extends State<RecordingsListPage> {
                                 audioUrl: recording["audio_url"],
                                 comments: recording["comments"] ?? ""))),
                   );
+                  if (result != null) {
+                    setState(() {
+                      _recordings[index]["comments"] = result.comments;
+                    });
+                  }
                 }
               },
               child: ListTile(
